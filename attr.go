@@ -17,7 +17,7 @@ type ContextAttr struct {
 	getFn        func(ctx context.Context) (value string, ok bool)
 }
 
-// Context returns an ContextAttr.
+// Context returns an [ContextAttr].
 func Context(
 	key string,
 	defaultValue *string,
@@ -44,7 +44,12 @@ func (a ContextAttr) Attr(ctx context.Context) (slog.Attr, bool) {
 	return slog.String(a.key, *value), true
 }
 
-// GetStringFn returns a ContextAttr's getFn for a string value with a given key.
+// P returns a pointer of v.
+func P[T any](v T) *T {
+	return &v
+}
+
+// GetStringFn returns a [ContextAttr]'s getFn for a string value with a given key.
 func GetStringFn(key any) func(ctx context.Context) (value string, ok bool) {
 	return func(ctx context.Context) (value string, ok bool) {
 		if value, ok := ctx.Value(key).(string); ok {

@@ -3,8 +3,6 @@ package cslog_test
 import (
 	"context"
 	"log/slog"
-	"regexp"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,37 +14,17 @@ import (
 // This is RFC3339Nano with the fixed 3 digit sub-second precision.
 const textTimeRE = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(Z|[+-]\d{2}:\d{2})`
 
-func checkLogOutput(t *testing.T, got, wantRegexp string) {
-	t.Helper()
-	got = clean(got)
-	wantRegexp = "^" + wantRegexp + "$"
-	matched, err := regexp.MatchString(wantRegexp, got)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !matched {
-		t.Errorf("\ngot  %s\nwant %s", got, wantRegexp)
-	}
-}
-
-// clean prepares log output for comparison.
-func clean(s string) string {
-	if len(s) > 0 && s[len(s)-1] == '\n' {
-		s = s[:len(s)-1]
-	}
-	return strings.ReplaceAll(s, "\n", "~")
-}
-
 func TestLog(t *testing.T) {
-	buf := testutil.UseBuf(t, false)
+
+	h := testutil.NewAssertHandler(t, testutil.AssertHandlerOpts{})
+	cslog.SetInnerHandler(h)
 
 	check := func(t *testing.T, want string) {
 		t.Helper()
 		if want != "" {
 			want = "time=" + textTimeRE + " " + want
 		}
-		checkLogOutput(t, buf.String(), want)
-		buf.Reset()
+		h.Check(t, want)
 	}
 
 	t.Run("context", func(t *testing.T) {
@@ -147,9 +125,8 @@ func TestLog(t *testing.T) {
 		testutil.SetIDGen(t)
 
 		type ctxKey struct{}
-		cslog.AddContextAttr(
-			"ctxAttr", nil,
-			cslog.GetStringFn(ctxKey{}),
+		cslog.AddContextAttrs(
+			cslog.Context("ctxAttr", nil, cslog.GetStringFn(ctxKey{})),
 		)
 
 		ctx := context.Background()
@@ -171,22 +148,22 @@ func TestLog(t *testing.T) {
 	})
 }
 
-func TestGetContextLogger(t *testing.T) {
-	buf := testutil.UseBuf(t, false)
+func TestNewLoggerWithContext(t *testing.T) {
+	h := testutil.NewAssertHandler(t, testutil.AssertHandlerOpts{})
+	cslog.SetInnerHandler(h)
 
 	check := func(t *testing.T, want string) {
 		t.Helper()
 		if want != "" {
 			want = "time=" + textTimeRE + " " + want
 		}
-		checkLogOutput(t, buf.String(), want)
-		buf.Reset()
+		h.Check(t, want)
 	}
 
 	t.Run("logger_parent", func(t *testing.T) {
 		testutil.SetIDGen(t)
 
-		ctx, logger := cslog.GetContextLogger(context.Background())
+		ctx, logger := cslog.NewLoggerWithContext(context.Background())
 
 		// By default, debug messages are not printed.
 		logger.Debug("debug", slog.Int("a", 1), "b", 2)
@@ -219,8 +196,8 @@ func TestGetContextLogger(t *testing.T) {
 	t.Run("logger_child", func(t *testing.T) {
 		testutil.SetIDGen(t)
 
-		parentCtx, _ := cslog.GetContextLogger(context.Background())
-		ctx, childLogger := cslog.CreateChildContextLogger(parentCtx)
+		parentCtx, _ := cslog.NewLoggerWithContext(context.Background())
+		ctx, childLogger := cslog.NewLoggerWithChildContext(parentCtx)
 
 		// By default, debug messages are not printed.
 		childLogger.Debug("debug", slog.Int("a", 1), "b", 2)
@@ -253,8 +230,8 @@ func TestGetContextLogger(t *testing.T) {
 	t.Run("logger_context", func(t *testing.T) {
 		testutil.SetIDGen(t)
 
-		parentCtx, _ := cslog.GetContextLogger(context.Background())
-		ctx, childLogger := cslog.CreateChildContextLogger(parentCtx)
+		parentCtx, _ := cslog.NewLoggerWithContext(context.Background())
+		ctx, childLogger := cslog.NewLoggerWithChildContext(parentCtx)
 
 		// If ctx has logId/parentLogId, logger's logId/parentLogId is overwritten.
 		ctx = cslog.WithChildLogContext(ctx)
@@ -291,12 +268,9 @@ func TestGetContextLogger(t *testing.T) {
 		testutil.SetIDGen(t)
 
 		type ctxKey struct{}
-		cslog.AddContextAttr(
-			"ctxAttr", nil,
-			cslog.GetStringFn(ctxKey{}),
-		)
+		cslog.AddContextAttrs(cslog.Context("ctxAttr", nil, cslog.GetStringFn(ctxKey{})))
 
-		ctx, logger := cslog.GetContextLogger(
+		ctx, logger := cslog.NewLoggerWithContext(
 			context.WithValue(
 				context.Background(),
 				ctxKey{}, "testValue",

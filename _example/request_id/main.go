@@ -46,12 +46,14 @@ func helloWorldHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	// Set up the cslog to output the logs with requestId when the given context has requestId.
-	cslog.AddContextAttr(
-		"requestId", nil,
-		func(ctx context.Context) (value string, ok bool) {
-			requestId := GetRequestId(ctx)
-			return requestId, requestId != ""
-		},
+	cslog.AddContextAttrs(
+		cslog.Context(
+			"requestId", nil,
+			func(ctx context.Context) (value string, ok bool) {
+				requestId := GetRequestId(ctx)
+				return requestId, requestId != ""
+			},
+		),
 	)
 
 	// Simulate an HTTP request using httptest instead of starting a server.

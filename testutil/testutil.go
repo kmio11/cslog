@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"bytes"
 	"fmt"
 	"log/slog"
 	"testing"
@@ -17,29 +16,6 @@ func RemoveTime(groups []string, a slog.Attr) slog.Attr {
 		return slog.Attr{}
 	}
 	return a
-}
-
-func UseBuf(t *testing.T, removeTime bool) *bytes.Buffer {
-	t.Helper()
-
-	buf := new(bytes.Buffer)
-
-	replaceAttr := func(groups []string, a slog.Attr) slog.Attr {
-		ret := a
-		if removeTime {
-			ret = RemoveTime(groups, a)
-		}
-		return ret
-	}
-
-	cslog.SetInnerHandler(slog.NewTextHandler(
-		buf, &slog.HandlerOptions{
-			ReplaceAttr: replaceAttr,
-			Level:       cslog.LogLevel(),
-		},
-	))
-
-	return buf
 }
 
 func SetLogLevel(t *testing.T, level slog.Level) {

@@ -16,7 +16,7 @@ const (
 
 type (
 	LoggerProvider struct {
-		handler *ContextHandler
+		logger *Logger
 	}
 
 	Logger struct {
@@ -59,7 +59,7 @@ func DefaultProvider() *LoggerProvider {
 
 // DefaultProvider returns the logger provided by the default logger provider.
 func DefaultLogger() *Logger {
-	return DefaultProvider().NewLogger()
+	return DefaultProvider().logger
 }
 
 // SetInnerHandler sets the default logger provider's handler.
@@ -85,48 +85,126 @@ func NewLoggerProvider(innerHandler slog.Handler) *LoggerProvider {
 	)
 
 	return &LoggerProvider{
-		handler: handler,
+		logger: newLogger(handler),
 	}
 }
 
 // SetInnerHandler sets the handler.
 func (p *LoggerProvider) SetInnerHandler(handler slog.Handler) {
-	p.handler.SetInnerHandler(handler)
+	p.logger.contextHandler().SetInnerHandler(handler)
+}
+
+// AddContextAttrs sets the attr (key-value pair) obtained from context to be output to the log.
+// See also [ContextAttr].
+func (p *LoggerProvider) AddContextAttrs(attrs ...ContextAttr) {
+	p.logger.contextHandler().AddContextAttrs(attrs...)
 }
 
 // NewLogger returns Logger.
 func (p *LoggerProvider) NewLogger() *Logger {
-	return NewLogger(p.handler)
+	return newLogger(p.logger.contextHandler())
 }
 
-// NewLoggerWithContextAttr returns a new Logger with the specified context attributes.
+// NewLoggerWithContext returns a context and a logger by [Logger.WithContext]
+func (p *LoggerProvider) NewLoggerWithContextAttrs(overwrite bool, attrs ...ContextAttr) *Logger {
+	return p.NewLogger().WithContextAttrs(overwrite, attrs...)
+}
+
+// NewLoggerWithContextAttrs returns a context and a logger by [Logger.WithContextAttrs]
+func (p *LoggerProvider) NewLoggerWithContext(ctx context.Context) (context.Context, *Logger) {
+	return p.logger.WithContext(ctx)
+}
+
+// NewLoggerWithChildContext returns a context and a logger by [Logger.WithChildContext]
+func (p *LoggerProvider) NewLoggerWithChildContext(ctx context.Context) (context.Context, *Logger) {
+	return p.logger.WithChildContext(ctx)
+}
+
+// AddContextAttrs calls [LoggerProvider.AddContextAttrs] on the default provider.
+func AddContextAttrs(attrs ...ContextAttr) {
+	DefaultProvider().AddContextAttrs(attrs...)
+}
+
+// NewLoggerWithContextAttrs calls [LoggerProvider.NewLoggerWithContextAttrs] on the default provider.
+func NewLoggerWithContextAttrs(overwrite bool, attrs ...ContextAttr) *Logger {
+	return DefaultProvider().NewLoggerWithContextAttrs(overwrite, attrs...)
+}
+
+// NewLoggerWithContext calls [LoggerProvider.NewLoggerWithContext] on the default provider.
+func NewLoggerWithContext(ctx context.Context) (context.Context, *Logger) {
+	return DefaultProvider().NewLoggerWithContext(ctx)
+}
+
+// NewContextLogger calls [LoggerProvider.NewLoggerWithChildContext] on the default provider.
+func NewLoggerWithChildContext(ctx context.Context) (context.Context, *Logger) {
+	return DefaultProvider().NewLoggerWithChildContext(ctx)
+}
+
+func (l *Logger) clone() *Logger {
+	c := *l
+	return &c
+}
+
+func (l *Logger) Handler() slog.Handler {
+	return l.sl.Handler()
+}
+
+func (l *Logger) contextHandler() *ContextHandler {
+	if ctxHandler, ok := l.Handler().(*ContextHandler); ok {
+		return ctxHandler
+	}
+	panic("invalid Handler")
+}
+
+// newLogger returns Logger.
+func newLogger(h *ContextHandler) *Logger {
+	if h == nil {
+		panic("nil Handler")
+	}
+	return &Logger{
+		sl: slog.New(h),
+	}
+}
+
+// NewLogger returns Logger.
+func NewLogger(innerHandler slog.Handler) *Logger {
+	return NewLoggerProvider(innerHandler).NewLogger()
+}
+
+func (l *Logger) With(args ...any) *Logger {
+	c := l.clone()
+	c.sl = l.sl.With(args...)
+	return c
+}
+
+func (l *Logger) WithGroup(name string) *Logger {
+	c := l.clone()
+	c.sl = l.sl.WithGroup(name)
+	return c
+}
+
+// WithContextAttrs returns a Logger that includes the given context
+// attributes in each output operation.
 // If overwrite is true, the context attributes of the new handler are replaced by the given attrs.
 // Otherwise, the given attrs are added to the existing context attributes of the new handler.
-func (p *LoggerProvider) NewLoggerWithContextAttr(overwrite bool, attrs ...ContextAttr) *Logger {
+func (l *Logger) WithContextAttrs(overwrite bool, attrs ...ContextAttr) *Logger {
+	oldHandler := l.contextHandler()
+
 	var newHandler *ContextHandler
 	if overwrite {
-		newHandler = p.handler.SetContextAttrs(attrs)
+		newHandler = oldHandler.SetContextAttrs(attrs)
 	} else {
-		newHandler = p.handler.WithContextAttrs(attrs...)
+		newHandler = oldHandler.WithContextAttrs(attrs...)
 	}
-	return NewLogger(newHandler)
+
+	return newLogger(newHandler)
 }
 
-// AddContextAttr sets the attr (key-value pair) obtained from context to be output to the log.
-// See also [ContextAttr]
-func (p *LoggerProvider) AddContextAttr(
-	key string,
-	defaultValue *string,
-	getFn func(ctx context.Context) (value string, ok bool),
-) {
-	p.handler.AddContextAttr(Context(key, defaultValue, getFn))
-}
-
-// GetContextLogger creates a new context and a corresponding logger.
+// NewLoggerWithContext creates a new context and a corresponding logger.
 // If the provided context (ctx) does not have a logId, a new logId is generated, and it is set to the context.
 // The created logger includes the logId, parentLogId, and other context attributes set in the provider based on the context.
 // The context attributes' default values are set to the values found in the given context, if they exist.
-func (p *LoggerProvider) GetContextLogger(ctx context.Context) (context.Context, *Logger) {
+func (l *Logger) WithContext(ctx context.Context) (context.Context, *Logger) {
 	newCtx := ctx
 	newAttrs := []ContextAttr{}
 
@@ -155,7 +233,7 @@ func (p *LoggerProvider) GetContextLogger(ctx context.Context) (context.Context,
 	))
 
 	// Set attrs handler already has.
-	for _, attr := range p.handler.attrs {
+	for _, attr := range l.contextHandler().attrs {
 		if attr.key == keyLogId || attr.key == keyParentLogId {
 			continue
 		}
@@ -172,79 +250,16 @@ func (p *LoggerProvider) GetContextLogger(ctx context.Context) (context.Context,
 		))
 	}
 
-	newLogger := p.NewLoggerWithContextAttr(true, newAttrs...)
+	newLogger := l.WithContextAttrs(true, newAttrs...)
 	return newCtx, newLogger
 }
 
-// CreateChildContextLogger creates a new child context and a corresponding logger.
+// NewLoggerWithChildContext creates a new child context and a corresponding logger.
 // If the provided context (ctx) has an existing logId, the parentLogId is set to the logId,
 // and it generates a new logId.
 // The child context includes both parentLogId and logId, and a new logger is created based on this child context.
-func (p *LoggerProvider) CreateChildContextLogger(ctx context.Context) (context.Context, *Logger) {
-	return p.GetContextLogger(WithChildLogContext(ctx))
-}
-
-// AddContextAttr calls LoggerProvider.AddContextAttr on the default provider.
-// See [LoggerProvider.AddContextAttr].
-func AddContextAttr(
-	key string,
-	defaultValue *string,
-	getFn func(ctx context.Context) (value string, ok bool),
-) {
-	DefaultProvider().AddContextAttr(key, defaultValue, getFn)
-}
-
-// GetContextLogger calls LoggerProvider.GetContextLogger on the default provider.
-// See [LoggerProvider.GetContextLogger].
-func GetContextLogger(ctx context.Context) (context.Context, *Logger) {
-	return DefaultProvider().GetContextLogger(ctx)
-}
-
-// NewContextLogger calls LoggerProvider.CreateChildContextLogger on the default provider.
-// See [LoggerProvider.CreateChildContextLogger].
-func CreateChildContextLogger(ctx context.Context) (context.Context, *Logger) {
-	return DefaultProvider().CreateChildContextLogger(ctx)
-}
-
-func (l *Logger) clone() *Logger {
-	c := *l
-	return &c
-}
-
-func (l *Logger) Handler() slog.Handler {
-	return l.sl.Handler()
-}
-
-// NewLogger returns Logger.
-func NewLogger(h *ContextHandler) *Logger {
-	if h == nil {
-		panic("nil Handler")
-	}
-	return &Logger{
-		sl: slog.New(h),
-	}
-}
-
-func (l *Logger) With(args ...any) *Logger {
-	c := l.clone()
-	c.sl = l.sl.With(args...)
-	return c
-}
-
-func (l *Logger) WithGroup(name string) *Logger {
-	c := l.clone()
-	c.sl = l.sl.WithGroup(name)
-	return c
-}
-
-// WithContextAttrs returns a Logger that includes the given context
-// attributes in each output operation.
-func (l *Logger) WithContextAttrs(attrs ...ContextAttr) *Logger {
-	if ctxHandler, ok := l.Handler().(*ContextHandler); ok {
-		newHandler := ctxHandler.WithContextAttrs(attrs...)
-		return NewLogger(newHandler)
-	}
-	return l
+func (l *Logger) WithChildContext(ctx context.Context) (context.Context, *Logger) {
+	return l.WithContext(WithChildLogContext(ctx))
 }
 
 func (l *Logger) Enabled(ctx context.Context, level slog.Level) bool {

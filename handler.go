@@ -31,8 +31,8 @@ func (h *ContextHandler) SetInnerHandler(ih slog.Handler) {
 	h.ih = ih
 }
 
-func (h *ContextHandler) AddContextAttr(attr ContextAttr) {
-	h.attrs = append(h.attrs, attr)
+func (h *ContextHandler) AddContextAttrs(attr ...ContextAttr) {
+	h.attrs = append(h.attrs, attr...)
 }
 
 func (h *ContextHandler) Enabled(ctx context.Context, l slog.Level) bool {
@@ -74,8 +74,6 @@ func (h *ContextHandler) SetContextAttrs(attrs []ContextAttr) *ContextHandler {
 // the receiver's existing context attributes.
 func (h *ContextHandler) WithContextAttrs(attrs ...ContextAttr) *ContextHandler {
 	c := h.clone()
-	for _, a := range attrs {
-		c.AddContextAttr(a)
-	}
+	c.AddContextAttrs(attrs...)
 	return c
 }
