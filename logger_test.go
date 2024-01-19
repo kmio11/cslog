@@ -49,6 +49,118 @@ func TestLogger(t *testing.T) {
 		buf.Reset()
 	}
 
+	t.Run("context", func(t *testing.T) {
+		testutil.SetIDGen(t)
+
+		ctx := cslog.WithLogContext(context.Background())
+
+		// By default, debug messages are not printed.
+		cslog.DebugContext(ctx, "debug", slog.Int("a", 1), "b", 2)
+		check(t, "")
+
+		testutil.SetLogLevel(t, slog.LevelDebug)
+
+		cslog.DebugContext(ctx, "debug", slog.Int("a", 1), "b", 2)
+		check(t, "level=DEBUG msg=debug a=1 b=2 logId=3030303030303030")
+
+		cslog.WarnContext(ctx, "w", slog.Duration("dur", 3*time.Second))
+		check(t, `level=WARN msg=w dur=3s logId=3030303030303030`)
+
+		cslog.ErrorContext(ctx, "bad", "a", 1)
+		check(t, `level=ERROR msg=bad a=1 logId=3030303030303030`)
+
+		cslog.Log(ctx, slog.LevelWarn+1, "w", slog.Int("a", 1), slog.String("b", "two"))
+		check(t, `level=WARN\+1 msg=w a=1 b=two logId=3030303030303030`)
+
+		cslog.LogAttrs(ctx, slog.LevelInfo+1, "a b c", slog.Int("a", 1), slog.String("b", "two"))
+		check(t, `level=INFO\+1 msg="a b c" a=1 b=two logId=3030303030303030`)
+
+		cslog.InfoContext(ctx, "info", "a", []slog.Attr{slog.Int("i", 1)})
+		check(t, `level=INFO msg=info a.i=1 logId=3030303030303030`)
+
+		cslog.InfoContext(ctx, "info", "a", slog.GroupValue(slog.Int("i", 1)))
+		check(t, `level=INFO msg=info a.i=1 logId=3030303030303030`)
+	})
+
+	t.Run("context_child", func(t *testing.T) {
+		testutil.SetIDGen(t)
+
+		ctx := cslog.WithLogContext(context.Background())
+		childCtx := cslog.WithChildLogContext(ctx)
+
+		// By default, debug messages are not printed.
+		cslog.DebugContext(childCtx, "debug", slog.Int("a", 1), "b", 2)
+		check(t, "")
+
+		testutil.SetLogLevel(t, slog.LevelDebug)
+
+		cslog.DebugContext(childCtx, "debug", slog.Int("a", 1), "b", 2)
+		check(t, "level=DEBUG msg=debug a=1 b=2 logId=3030303030303031 parentLogId=3030303030303030")
+
+		cslog.WarnContext(childCtx, "w", slog.Duration("dur", 3*time.Second))
+		check(t, `level=WARN msg=w dur=3s logId=3030303030303031 parentLogId=3030303030303030`)
+
+		cslog.ErrorContext(childCtx, "bad", "a", 1)
+		check(t, `level=ERROR msg=bad a=1 logId=3030303030303031 parentLogId=3030303030303030`)
+
+		cslog.Log(childCtx, slog.LevelWarn+1, "w", slog.Int("a", 1), slog.String("b", "two"))
+		check(t, `level=WARN\+1 msg=w a=1 b=two logId=3030303030303031 parentLogId=3030303030303030`)
+
+		cslog.LogAttrs(childCtx, slog.LevelInfo+1, "a b c", slog.Int("a", 1), slog.String("b", "two"))
+		check(t, `level=INFO\+1 msg="a b c" a=1 b=two logId=3030303030303031 parentLogId=3030303030303030`)
+
+		cslog.InfoContext(childCtx, "info", "a", []slog.Attr{slog.Int("i", 1)})
+		check(t, `level=INFO msg=info a.i=1 logId=3030303030303031 parentLogId=3030303030303030`)
+
+		cslog.InfoContext(childCtx, "info", "a", slog.GroupValue(slog.Int("i", 1)))
+		check(t, `level=INFO msg=info a.i=1 logId=3030303030303031 parentLogId=3030303030303030`)
+	})
+
+	t.Run("custom_attr", func(t *testing.T) {
+		testutil.SetIDGen(t)
+
+		type ctxKey struct{}
+		cslog.AddContextAttr(
+			"ctxAttr", nil,
+			func(ctx context.Context) (value string, ok bool) {
+				if v, ok := ctx.Value(ctxKey{}).(string); ok {
+					return v, true
+				}
+				return "", false
+			},
+		)
+
+		ctx := context.Background()
+
+		cslog.ErrorContext(ctx, "no value in context", "a", 1)
+		check(t, `level=ERROR msg="no value in context" a=1`)
+
+		ctx = context.WithValue(ctx, ctxKey{}, "testValue")
+		cslog.ErrorContext(ctx, "value exists in context", "a", 1)
+		check(t, `level=ERROR msg="value exists in context" a=1 ctxAttr=testValue`)
+
+		ctx = cslog.WithLogContext(ctx)
+		cslog.ErrorContext(ctx, "with logId", "a", 1)
+		check(t, `level=ERROR msg="with logId" a=1 logId=3030303030303030 ctxAttr=testValue`)
+
+		ctx = cslog.WithChildLogContext(ctx)
+		cslog.ErrorContext(ctx, "with logId and parentLogId", "a", 1)
+		check(t, `level=ERROR msg="with logId and parentLogId" a=1 logId=3030303030303031 parentLogId=3030303030303030 ctxAttr=testValue`)
+	})
+}
+
+func TestLogger_Logger(t *testing.T) {
+	buf := testutil.UseBuf(t, false)
+
+	check := func(t *testing.T, want string) {
+		t.Helper()
+		if want != "" {
+			want = "time=" + textTimeRE + " " + want
+		}
+		checkLogOutput(t, buf.String(), want)
+		buf.Reset()
+	}
+
 	t.Run("logger_parent", func(t *testing.T) {
 		testutil.SetIDGen(t)
 
@@ -153,70 +265,32 @@ func TestLogger(t *testing.T) {
 		check(t, `level=INFO msg=info a.i=1 logId=3030303030303032 parentLogId=3030303030303031`)
 	})
 
-	t.Run("context", func(t *testing.T) {
+	t.Run("custom_attr", func(t *testing.T) {
 		testutil.SetIDGen(t)
 
-		ctx := cslog.WithLogContext(context.Background())
+		type ctxKey struct{}
+		cslog.AddContextAttr(
+			"ctxAttr", nil,
+			func(ctx context.Context) (value string, ok bool) {
+				if v, ok := ctx.Value(ctxKey{}).(string); ok {
+					return v, true
+				}
+				return "", false
+			},
+		)
 
-		// By default, debug messages are not printed.
-		cslog.DebugContext(ctx, "debug", slog.Int("a", 1), "b", 2)
-		check(t, "")
+		ctx, logger := cslog.GetContextLogger(
+			context.WithValue(
+				context.Background(),
+				ctxKey{}, "testValue",
+			),
+		)
 
-		testutil.SetLogLevel(t, slog.LevelDebug)
+		logger.Error("value by logger", "a", 1)
+		check(t, `level=ERROR msg="value by logger" a=1 logId=3030303030303030 ctxAttr=testValue`)
 
-		cslog.DebugContext(ctx, "debug", slog.Int("a", 1), "b", 2)
-		check(t, "level=DEBUG msg=debug a=1 b=2 logId=3030303030303030")
-
-		cslog.WarnContext(ctx, "w", slog.Duration("dur", 3*time.Second))
-		check(t, `level=WARN msg=w dur=3s logId=3030303030303030`)
-
-		cslog.ErrorContext(ctx, "bad", "a", 1)
-		check(t, `level=ERROR msg=bad a=1 logId=3030303030303030`)
-
-		cslog.Log(ctx, slog.LevelWarn+1, "w", slog.Int("a", 1), slog.String("b", "two"))
-		check(t, `level=WARN\+1 msg=w a=1 b=two logId=3030303030303030`)
-
-		cslog.LogAttrs(ctx, slog.LevelInfo+1, "a b c", slog.Int("a", 1), slog.String("b", "two"))
-		check(t, `level=INFO\+1 msg="a b c" a=1 b=two logId=3030303030303030`)
-
-		cslog.InfoContext(ctx, "info", "a", []slog.Attr{slog.Int("i", 1)})
-		check(t, `level=INFO msg=info a.i=1 logId=3030303030303030`)
-
-		cslog.InfoContext(ctx, "info", "a", slog.GroupValue(slog.Int("i", 1)))
-		check(t, `level=INFO msg=info a.i=1 logId=3030303030303030`)
-	})
-
-	t.Run("context_child", func(t *testing.T) {
-		testutil.SetIDGen(t)
-
-		ctx := cslog.WithLogContext(context.Background())
-		childCtx := cslog.WithChildLogContext(ctx)
-
-		// By default, debug messages are not printed.
-		cslog.DebugContext(childCtx, "debug", slog.Int("a", 1), "b", 2)
-		check(t, "")
-
-		testutil.SetLogLevel(t, slog.LevelDebug)
-
-		cslog.DebugContext(childCtx, "debug", slog.Int("a", 1), "b", 2)
-		check(t, "level=DEBUG msg=debug a=1 b=2 logId=3030303030303031 parentLogId=3030303030303030")
-
-		cslog.WarnContext(childCtx, "w", slog.Duration("dur", 3*time.Second))
-		check(t, `level=WARN msg=w dur=3s logId=3030303030303031 parentLogId=3030303030303030`)
-
-		cslog.ErrorContext(childCtx, "bad", "a", 1)
-		check(t, `level=ERROR msg=bad a=1 logId=3030303030303031 parentLogId=3030303030303030`)
-
-		cslog.Log(childCtx, slog.LevelWarn+1, "w", slog.Int("a", 1), slog.String("b", "two"))
-		check(t, `level=WARN\+1 msg=w a=1 b=two logId=3030303030303031 parentLogId=3030303030303030`)
-
-		cslog.LogAttrs(childCtx, slog.LevelInfo+1, "a b c", slog.Int("a", 1), slog.String("b", "two"))
-		check(t, `level=INFO\+1 msg="a b c" a=1 b=two logId=3030303030303031 parentLogId=3030303030303030`)
-
-		cslog.InfoContext(childCtx, "info", "a", []slog.Attr{slog.Int("i", 1)})
-		check(t, `level=INFO msg=info a.i=1 logId=3030303030303031 parentLogId=3030303030303030`)
-
-		cslog.InfoContext(childCtx, "info", "a", slog.GroupValue(slog.Int("i", 1)))
-		check(t, `level=INFO msg=info a.i=1 logId=3030303030303031 parentLogId=3030303030303030`)
+		ctx = context.WithValue(ctx, ctxKey{}, "overwritten")
+		logger.ErrorContext(ctx, "value is overwittern by context", "a", 1)
+		check(t, `level=ERROR msg="value is overwittern by context" a=1 logId=3030303030303030 ctxAttr=overwritten`)
 	})
 }

@@ -32,7 +32,7 @@ func UseBuf(t *testing.T, removeTime bool) *bytes.Buffer {
 		return ret
 	}
 
-	cslog.SetHandler(slog.NewTextHandler(
+	cslog.SetInnerHandler(slog.NewTextHandler(
 		buf, &slog.HandlerOptions{
 			ReplaceAttr: replaceAttr,
 			Level:       cslog.LogLevel(),

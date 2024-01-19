@@ -62,9 +62,9 @@ func DefaultLogger() *Logger {
 	return DefaultProvider().NewLogger()
 }
 
-// SetHandler sets the default logger provider's handler.
-func SetHandler(handler slog.Handler) {
-	defaultLoggerProvider = NewLoggerProvider(handler)
+// SetInnerHandler sets the default logger provider's handler.
+func SetInnerHandler(handler slog.Handler) {
+	defaultLoggerProvider.SetInnerHandler(handler)
 }
 
 // SetLogLevel sets the log level of the default logger provider.
@@ -78,10 +78,20 @@ func LogLevel() *slog.LevelVar {
 }
 
 // NewLoggerProvider returns LoggerProvider.
-func NewLoggerProvider(handler slog.Handler) *LoggerProvider {
+func NewLoggerProvider(innerHandler slog.Handler) *LoggerProvider {
+	handler := NewContextHandler(innerHandler).WithContextAttrs(
+		Context(keyLogId, nil, getLogIdFunc),
+		Context(keyParentLogId, nil, getParentLogIdFunc),
+	)
+
 	return &LoggerProvider{
-		handler: NewContextHandler(handler),
+		handler: handler,
 	}
+}
+
+// SetInnerHandler sets the handler.
+func (p *LoggerProvider) SetInnerHandler(handler slog.Handler) {
+	p.handler.SetInnerHandler(handler)
 }
 
 // NewLogger returns Logger.
@@ -89,20 +99,80 @@ func (p *LoggerProvider) NewLogger() *Logger {
 	return NewLogger(p.handler)
 }
 
+// NewLoggerWithContextAttr returns a new Logger with the specified context attributes.
+// If overwrite is true, the context attributes of the new handler are replaced by the given attrs.
+// Otherwise, the given attrs are added to the existing context attributes of the new handler.
+func (p *LoggerProvider) NewLoggerWithContextAttr(overwrite bool, attrs ...ContextAttr) *Logger {
+	var newHandler *ContextHandler
+	if overwrite {
+		newHandler = p.handler.SetContextAttrs(attrs)
+	} else {
+		newHandler = p.handler.WithContextAttrs(attrs...)
+	}
+	return NewLogger(newHandler)
+}
+
+// AddContextAttr sets the attr (key-value pair) obtained from context to be output to the log.
+// See also [ContextAttr]
+func (p *LoggerProvider) AddContextAttr(
+	key string,
+	defaultValue *string,
+	getFn func(ctx context.Context) (value string, ok bool),
+) {
+	p.handler.AddContextAttr(Context(key, defaultValue, getFn))
+}
+
 // GetContextLogger creates a new context and a corresponding logger.
-// If the provided context (ctx) does not have a logId, a new logId is generated.
-// The created logger includes the logId and parentLogId attributes based on the context.
+// If the provided context (ctx) does not have a logId, a new logId is generated, and it is set to the context.
+// The created logger includes the logId, parentLogId, and other context attributes set in the provider based on the context.
+// The context attributes' default values are set to the values found in the given context, if they exist.
 func (p *LoggerProvider) GetContextLogger(ctx context.Context) (context.Context, *Logger) {
 	newCtx := ctx
-	logId := GetLogID(ctx)
-	if logId.IsZero() {
+	newAttrs := []ContextAttr{}
+
+	// Set logId
+	if GetLogID(ctx).IsZero() {
 		newCtx = WithLogContext(ctx)
 	}
-	newLogger := p.NewLogger().With(
-		keyLogId, GetLogID(newCtx),
-		keyParentLogId, GetParentLogID(ctx),
-	)
+	logId := GetLogID(newCtx).String()
 
+	newAttrs = append(newAttrs, Context(
+		keyLogId,
+		&logId,
+		getLogIdFunc,
+	))
+
+	// Set parentLogId
+	var parentId *string
+	if pid := GetParentLogID(ctx); !pid.IsZero() {
+		ppid := pid.String()
+		parentId = &ppid
+	}
+	newAttrs = append(newAttrs, Context(
+		keyParentLogId,
+		parentId,
+		getParentLogIdFunc,
+	))
+
+	// Set attrs handler already has.
+	for _, attr := range p.handler.attrs {
+		if attr.key == keyLogId || attr.key == keyParentLogId {
+			continue
+		}
+
+		var defaultValue *string
+		if currentValue, ok := attr.getFn(ctx); ok {
+			defaultValue = &currentValue
+		}
+
+		newAttrs = append(newAttrs, Context(
+			attr.key,
+			defaultValue, // use current context's value as default value.
+			attr.getFn,
+		))
+	}
+
+	newLogger := p.NewLoggerWithContextAttr(true, newAttrs...)
 	return newCtx, newLogger
 }
 
@@ -112,6 +182,16 @@ func (p *LoggerProvider) GetContextLogger(ctx context.Context) (context.Context,
 // The child context includes both parentLogId and logId, and a new logger is created based on this child context.
 func (p *LoggerProvider) CreateChildContextLogger(ctx context.Context) (context.Context, *Logger) {
 	return p.GetContextLogger(WithChildLogContext(ctx))
+}
+
+// AddContextAttr calls LoggerProvider.AddContextAttr on the default provider.
+// See [LoggerProvider.AddContextAttr].
+func AddContextAttr(
+	key string,
+	defaultValue *string,
+	getFn func(ctx context.Context) (value string, ok bool),
+) {
+	DefaultProvider().AddContextAttr(key, defaultValue, getFn)
 }
 
 // GetContextLogger calls LoggerProvider.GetContextLogger on the default provider.
@@ -147,7 +227,7 @@ func (l *Logger) WithGroup(name string) *Logger {
 	return c
 }
 
-func NewLogger(h slog.Handler) *Logger {
+func NewLogger(h *ContextHandler) *Logger {
 	if h == nil {
 		panic("nil Handler")
 	}

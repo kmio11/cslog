@@ -46,3 +46,15 @@ func WithChildLogContext(ctx context.Context) context.Context {
 
 	return newCtx
 }
+
+// function for ContextAttr.getFn
+func getLogIdFunc(ctx context.Context) (value string, ok bool) {
+	logId := GetLogID(ctx)
+	return logId.String(), !logId.IsZero()
+}
+
+// function for ContextAttr.getFn
+func getParentLogIdFunc(ctx context.Context) (value string, ok bool) {
+	parentLogId := GetParentLogID(ctx)
+	return parentLogId.String(), !parentLogId.IsZero()
+}
