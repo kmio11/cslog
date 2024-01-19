@@ -37,7 +37,7 @@ func clean(s string) string {
 	return strings.ReplaceAll(s, "\n", "~")
 }
 
-func TestLogger(t *testing.T) {
+func TestLog(t *testing.T) {
 	buf := testutil.UseBuf(t, false)
 
 	check := func(t *testing.T, want string) {
@@ -80,6 +80,33 @@ func TestLogger(t *testing.T) {
 
 		cslog.InfoContext(ctx, "info", "a", slog.GroupValue(slog.Int("i", 1)))
 		check(t, `level=INFO msg=info a.i=1 logId=3030303030303030`)
+	})
+
+	t.Run("without_context", func(t *testing.T) {
+		testutil.SetIDGen(t)
+
+		_ = cslog.WithLogContext(context.Background())
+
+		// By default, debug messages are not printed.
+		cslog.Debug("debug", slog.Int("a", 1), "b", 2)
+		check(t, "")
+
+		testutil.SetLogLevel(t, slog.LevelDebug)
+
+		cslog.Debug("debug", slog.Int("a", 1), "b", 2)
+		check(t, "level=DEBUG msg=debug a=1 b=2")
+
+		cslog.Warn("w", slog.Duration("dur", 3*time.Second))
+		check(t, `level=WARN msg=w dur=3s`)
+
+		cslog.Error("bad", "a", 1)
+		check(t, `level=ERROR msg=bad a=1`)
+
+		cslog.Info("info", "a", []slog.Attr{slog.Int("i", 1)})
+		check(t, `level=INFO msg=info a.i=1`)
+
+		cslog.Info("info", "a", slog.GroupValue(slog.Int("i", 1)))
+		check(t, `level=INFO msg=info a.i=1`)
 	})
 
 	t.Run("context_child", func(t *testing.T) {
@@ -149,7 +176,7 @@ func TestLogger(t *testing.T) {
 	})
 }
 
-func TestLogger_Logger(t *testing.T) {
+func TestGetContextLogger(t *testing.T) {
 	buf := testutil.UseBuf(t, false)
 
 	check := func(t *testing.T, want string) {

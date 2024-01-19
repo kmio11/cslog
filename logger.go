@@ -341,9 +341,19 @@ func LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.A
 	DefaultLogger().logAttrs(ctx, level, msg, attrs...)
 }
 
+// Debug calls Logger.Debug on the default logger.
+func Debug(msg string, args ...any) {
+	DefaultLogger().log(context.Background(), slog.LevelDebug, msg, args...)
+}
+
 // DebugContext calls Logger.DebugContext on the default logger.
 func DebugContext(ctx context.Context, msg string, args ...any) {
 	DefaultLogger().log(ctx, slog.LevelDebug, msg, args...)
+}
+
+// Info calls Logger.Info on the default logger.
+func Info(msg string, args ...any) {
+	DefaultLogger().log(context.Background(), slog.LevelInfo, msg, args...)
 }
 
 // InfoContext calls Logger.InfoContext on the default logger.
@@ -351,9 +361,19 @@ func InfoContext(ctx context.Context, msg string, args ...any) {
 	DefaultLogger().log(ctx, slog.LevelInfo, msg, args...)
 }
 
+// Warn calls Logger.Warn on the default logger.
+func Warn(msg string, args ...any) {
+	DefaultLogger().log(context.Background(), slog.LevelWarn, msg, args...)
+}
+
 // WarnContext calls Logger.WarnContext on the default logger.
 func WarnContext(ctx context.Context, msg string, args ...any) {
 	DefaultLogger().log(ctx, slog.LevelWarn, msg, args...)
+}
+
+// Error calls Logger.Error on the default logger.
+func Error(msg string, args ...any) {
+	DefaultLogger().log(context.Background(), slog.LevelError, msg, args...)
 }
 
 // ErrorContext calls Logger.ErrorContext on the default logger.
