@@ -215,6 +215,16 @@ func (l *Logger) Handler() slog.Handler {
 	return l.sl.Handler()
 }
 
+// NewLogger returns Logger.
+func NewLogger(h *ContextHandler) *Logger {
+	if h == nil {
+		panic("nil Handler")
+	}
+	return &Logger{
+		sl: slog.New(h),
+	}
+}
+
 func (l *Logger) With(args ...any) *Logger {
 	c := l.clone()
 	c.sl = l.sl.With(args...)
@@ -227,13 +237,14 @@ func (l *Logger) WithGroup(name string) *Logger {
 	return c
 }
 
-func NewLogger(h *ContextHandler) *Logger {
-	if h == nil {
-		panic("nil Handler")
+// WithContextAttrs returns a Logger that includes the given context
+// attributes in each output operation.
+func (l *Logger) WithContextAttrs(attrs ...ContextAttr) *Logger {
+	if ctxHandler, ok := l.Handler().(*ContextHandler); ok {
+		newHandler := ctxHandler.WithContextAttrs(attrs...)
+		return NewLogger(newHandler)
 	}
-	return &Logger{
-		sl: slog.New(h),
-	}
+	return l
 }
 
 func (l *Logger) Enabled(ctx context.Context, level slog.Level) bool {
