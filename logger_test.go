@@ -149,12 +149,7 @@ func TestLog(t *testing.T) {
 		type ctxKey struct{}
 		cslog.AddContextAttr(
 			"ctxAttr", nil,
-			func(ctx context.Context) (value string, ok bool) {
-				if v, ok := ctx.Value(ctxKey{}).(string); ok {
-					return v, true
-				}
-				return "", false
-			},
+			cslog.GetStringFn(ctxKey{}),
 		)
 
 		ctx := context.Background()
@@ -298,12 +293,7 @@ func TestGetContextLogger(t *testing.T) {
 		type ctxKey struct{}
 		cslog.AddContextAttr(
 			"ctxAttr", nil,
-			func(ctx context.Context) (value string, ok bool) {
-				if v, ok := ctx.Value(ctxKey{}).(string); ok {
-					return v, true
-				}
-				return "", false
-			},
+			cslog.GetStringFn(ctxKey{}),
 		)
 
 		ctx, logger := cslog.GetContextLogger(
