@@ -11,10 +11,11 @@ type IDGenerator interface {
 	NewID() LogID
 }
 
-var idGenerator IDGenerator = newRandGen()
+var logIdGenerator IDGenerator = newRandGen()
 
-func SetIDGenerator(gen IDGenerator) {
-	idGenerator = gen
+// SetLogIdGenerator sets the logIdGenerator which generates logId and parentLogId.
+func SetLogIdGenerator(gen IDGenerator) {
+	logIdGenerator = gen
 }
 
 var _ IDGenerator = (*randGen)(nil)
@@ -36,7 +37,7 @@ func (r *randGen) NewID() LogID {
 	r.Lock()
 	defer r.Unlock()
 
-	id := LogID{}
+	id := ByteLogID{}
 	_, _ = r.randSource.Read(id[:])
 
 	return id

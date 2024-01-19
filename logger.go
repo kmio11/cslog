@@ -131,7 +131,7 @@ func (p *LoggerProvider) GetContextLogger(ctx context.Context) (context.Context,
 	newAttrs := []ContextAttr{}
 
 	// Set logId
-	if GetLogID(ctx).IsZero() {
+	if id := GetLogID(ctx); id == nil || id.IsZero() {
 		newCtx = WithLogContext(ctx)
 	}
 	logId := GetLogID(newCtx).String()
@@ -144,7 +144,7 @@ func (p *LoggerProvider) GetContextLogger(ctx context.Context) (context.Context,
 
 	// Set parentLogId
 	var parentId *string
-	if pid := GetParentLogID(ctx); !pid.IsZero() {
+	if pid := GetParentLogID(ctx); pid != nil && !pid.IsZero() {
 		ppid := pid.String()
 		parentId = &ppid
 	}

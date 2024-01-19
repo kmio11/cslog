@@ -4,11 +4,28 @@ import (
 	"encoding/hex"
 )
 
-type LogID [8]byte
+type LogID interface {
+	String() string
+	IsZero() bool
+}
 
-var Nil = LogID{}
+var _ LogID = StringLogID("")
 
-func (id LogID) String() string {
+type StringLogID string
+
+func (s StringLogID) String() string {
+	return string(s)
+}
+
+func (s StringLogID) IsZero() bool {
+	return s == ""
+}
+
+var _ LogID = ByteLogID{}
+
+type ByteLogID [8]byte
+
+func (id ByteLogID) String() string {
 	if id.IsZero() {
 		return ""
 	}
@@ -16,6 +33,6 @@ func (id LogID) String() string {
 }
 
 // IsZero reports whether id represents the zero instant,
-func (id LogID) IsZero() bool {
-	return id == Nil
+func (id ByteLogID) IsZero() bool {
+	return id == ByteLogID{}
 }

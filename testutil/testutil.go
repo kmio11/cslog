@@ -61,19 +61,17 @@ type CountUpIDGen struct {
 }
 
 func (gen *CountUpIDGen) NewID() cslog.LogID {
-	id := fmt.Sprintf("%08d", gen.cnt)
+	id := fmt.Sprintf("%016d", gen.cnt)
 	gen.cnt += 1
-	idByteArray := cslog.LogID{}
-	copy(idByteArray[:], id)
-	return cslog.LogID(idByteArray)
+	return cslog.StringLogID(id)
 }
 
 func SetIDGen(t *testing.T) {
 	t.Helper()
-	cslog.SetIDGenerator(&CountUpIDGen{})
+	cslog.SetLogIdGenerator(&CountUpIDGen{})
 }
 
 func ResetIDCount(t *testing.T) {
 	t.Helper()
-	cslog.SetIDGenerator(&CountUpIDGen{})
+	cslog.SetLogIdGenerator(&CountUpIDGen{})
 }
