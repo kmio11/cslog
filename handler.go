@@ -42,12 +42,14 @@ func (h *ContextHandler) Enabled(ctx context.Context, l slog.Level) bool {
 // Handle processes the given slog.Record within the context.
 // It enhances the Record's attributes with the context attributes obtained from the context.
 func (h *ContextHandler) Handle(ctx context.Context, r slog.Record) error {
+	cr := r.Clone()
+
 	for _, a := range h.attrs {
 		if attr, ok := a.Attr(ctx); ok {
-			r.AddAttrs(attr)
+			cr.AddAttrs(attr)
 		}
 	}
-	return h.ih.Handle(ctx, r)
+	return h.ih.Handle(ctx, cr)
 }
 
 func (h *ContextHandler) WithAttrs(as []slog.Attr) slog.Handler {
