@@ -267,56 +267,57 @@ func (l *Logger) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (l *Logger) Log(ctx context.Context, level slog.Level, msg string, args ...any) {
-	l.log(ctx, level, msg, args...)
+	l.HandleLog(ctx, level, 0, msg, args...)
 }
 
 func (l *Logger) LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) {
-	l.logAttrs(ctx, level, msg, attrs...)
+	l.HandleLogAttrs(ctx, level, 0, msg, attrs...)
 }
 
 func (l *Logger) Debug(msg string, args ...any) {
-	l.log(context.Background(), slog.LevelDebug, msg, args...)
+	l.HandleLog(context.Background(), slog.LevelDebug, 0, msg, args...)
 }
 
 func (l *Logger) DebugContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, slog.LevelDebug, msg, args...)
+	l.HandleLog(ctx, slog.LevelDebug, 0, msg, args...)
 }
 
 func (l *Logger) Info(msg string, args ...any) {
-	l.log(context.Background(), slog.LevelInfo, msg, args...)
+	l.HandleLog(context.Background(), slog.LevelInfo, 0, msg, args...)
 }
 
 func (l *Logger) InfoContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, slog.LevelInfo, msg, args...)
+	l.HandleLog(ctx, slog.LevelInfo, 0, msg, args...)
 }
 
 func (l *Logger) Warn(msg string, args ...any) {
-	l.log(context.Background(), slog.LevelWarn, msg, args...)
+	l.HandleLog(context.Background(), slog.LevelWarn, 0, msg, args...)
 }
 
 func (l *Logger) WarnContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, slog.LevelWarn, msg, args...)
+	l.HandleLog(ctx, slog.LevelWarn, 0, msg, args...)
 }
 
 func (l *Logger) Error(msg string, args ...any) {
-	l.log(context.Background(), slog.LevelError, msg, args...)
+	l.HandleLog(context.Background(), slog.LevelError, 0, msg, args...)
 }
 
 func (l *Logger) ErrorContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, slog.LevelError, msg, args...)
+	l.HandleLog(ctx, slog.LevelError, 0, msg, args...)
 }
 
-// log is the low-level logging method for methods that take ...any.
-// It must always be called directly by an exported logging method
-// or function, because it uses a fixed call depth to obtain the pc.
-func (l *Logger) log(ctx context.Context, level slog.Level, msg string, args ...any) {
+// HandleLog is the low-level logging method for methods that take ...any.
+// When it is called directly by a logging method or function, set callDepth is 0.
+// If you create a wrapped logging function and want to include source code locations in the log,
+// set the appropriate callDepth.
+func (l *Logger) HandleLog(ctx context.Context, level slog.Level, callDepth int, msg string, args ...any) {
 	if !l.Enabled(ctx, level) {
 		return
 	}
 	var pc uintptr
 	var pcs [1]uintptr
 	// skip [runtime.Callers, this function, this function's caller]
-	runtime.Callers(3, pcs[:])
+	runtime.Callers(3+callDepth, pcs[:])
 	pc = pcs[0]
 
 	r := slog.NewRecord(now(), level, msg, pc)
@@ -327,15 +328,15 @@ func (l *Logger) log(ctx context.Context, level slog.Level, msg string, args ...
 	_ = l.Handler().Handle(ctx, r)
 }
 
-// logAttrs is like [Logger.log], but for methods that take ...Attr.
-func (l *Logger) logAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) {
+// HandleLogAttrs is like [Logger.log], but for methods that take ...Attr.
+func (l *Logger) HandleLogAttrs(ctx context.Context, level slog.Level, callDepth int, msg string, attrs ...slog.Attr) {
 	if !l.Enabled(ctx, level) {
 		return
 	}
 	var pc uintptr
 	var pcs [1]uintptr
 	// skip [runtime.Callers, this function, this function's caller]
-	runtime.Callers(3, pcs[:])
+	runtime.Callers(3+callDepth, pcs[:])
 	pc = pcs[0]
 
 	r := slog.NewRecord(now(), level, msg, pc)
@@ -348,50 +349,50 @@ func (l *Logger) logAttrs(ctx context.Context, level slog.Level, msg string, att
 
 // Log calls Logger.Log on the default logger.
 func Log(ctx context.Context, level slog.Level, msg string, args ...any) {
-	DefaultLogger().log(ctx, level, msg, args...)
+	DefaultLogger().HandleLog(ctx, level, 0, msg, args...)
 }
 
 // LogAttrs calls Logger.LogAttrs on the default logger.
 func LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) {
-	DefaultLogger().logAttrs(ctx, level, msg, attrs...)
+	DefaultLogger().HandleLogAttrs(ctx, level, 0, msg, attrs...)
 }
 
 // Debug calls Logger.Debug on the default logger.
 func Debug(msg string, args ...any) {
-	DefaultLogger().log(context.Background(), slog.LevelDebug, msg, args...)
+	DefaultLogger().HandleLog(context.Background(), slog.LevelDebug, 0, msg, args...)
 }
 
 // DebugContext calls Logger.DebugContext on the default logger.
 func DebugContext(ctx context.Context, msg string, args ...any) {
-	DefaultLogger().log(ctx, slog.LevelDebug, msg, args...)
+	DefaultLogger().HandleLog(ctx, slog.LevelDebug, 0, msg, args...)
 }
 
 // Info calls Logger.Info on the default logger.
 func Info(msg string, args ...any) {
-	DefaultLogger().log(context.Background(), slog.LevelInfo, msg, args...)
+	DefaultLogger().HandleLog(context.Background(), slog.LevelInfo, 0, msg, args...)
 }
 
 // InfoContext calls Logger.InfoContext on the default logger.
 func InfoContext(ctx context.Context, msg string, args ...any) {
-	DefaultLogger().log(ctx, slog.LevelInfo, msg, args...)
+	DefaultLogger().HandleLog(ctx, slog.LevelInfo, 0, msg, args...)
 }
 
 // Warn calls Logger.Warn on the default logger.
 func Warn(msg string, args ...any) {
-	DefaultLogger().log(context.Background(), slog.LevelWarn, msg, args...)
+	DefaultLogger().HandleLog(context.Background(), slog.LevelWarn, 0, msg, args...)
 }
 
 // WarnContext calls Logger.WarnContext on the default logger.
 func WarnContext(ctx context.Context, msg string, args ...any) {
-	DefaultLogger().log(ctx, slog.LevelWarn, msg, args...)
+	DefaultLogger().HandleLog(ctx, slog.LevelWarn, 0, msg, args...)
 }
 
 // Error calls Logger.Error on the default logger.
 func Error(msg string, args ...any) {
-	DefaultLogger().log(context.Background(), slog.LevelError, msg, args...)
+	DefaultLogger().HandleLog(context.Background(), slog.LevelError, 0, msg, args...)
 }
 
 // ErrorContext calls Logger.ErrorContext on the default logger.
 func ErrorContext(ctx context.Context, msg string, args ...any) {
-	DefaultLogger().log(ctx, slog.LevelError, msg, args...)
+	DefaultLogger().HandleLog(ctx, slog.LevelError, 0, msg, args...)
 }
