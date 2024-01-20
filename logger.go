@@ -80,8 +80,8 @@ func LogLevel() *slog.LevelVar {
 // NewLoggerProvider returns LoggerProvider.
 func NewLoggerProvider(innerHandler slog.Handler) *LoggerProvider {
 	handler := NewContextHandler(innerHandler).WithContextAttrs(
-		Context(keyLogId, nil, getLogIdFunc),
-		Context(keyParentLogId, nil, getParentLogIdFunc),
+		Context(keyLogId, nil, getLogIdFunc, nil),
+		Context(keyParentLogId, nil, getParentLogIdFunc, nil),
 	)
 
 	return &LoggerProvider{
@@ -212,20 +212,21 @@ func (l *Logger) WithContext(ctx context.Context) (context.Context, *Logger) {
 
 	newAttrs = append(newAttrs, Context(
 		keyLogId,
-		&logId,
+		logId,
 		getLogIdFunc,
+		nil,
 	))
 
 	// Set parentLogId
-	var parentId *string
+	var parentId any
 	if pid := GetParentLogID(ctx); pid != nil && !pid.IsZero() {
-		ppid := pid.String()
-		parentId = &ppid
+		parentId = pid.String()
 	}
 	newAttrs = append(newAttrs, Context(
 		keyParentLogId,
 		parentId,
 		getParentLogIdFunc,
+		nil,
 	))
 
 	// Set attrs handler already has.
@@ -234,15 +235,16 @@ func (l *Logger) WithContext(ctx context.Context) (context.Context, *Logger) {
 			continue
 		}
 
-		var defaultValue *string
+		var defaultValue any
 		if currentValue, ok := attr.getFn(ctx); ok {
-			defaultValue = &currentValue
+			defaultValue = currentValue
 		}
 
 		newAttrs = append(newAttrs, Context(
 			attr.key,
 			defaultValue, // use current context's value as default value.
 			attr.getFn,
+			nil,
 		))
 	}
 

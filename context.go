@@ -48,19 +48,19 @@ func WithChildLogContext(ctx context.Context) context.Context {
 }
 
 // function for ContextAttr.getFn
-func getLogIdFunc(ctx context.Context) (value string, ok bool) {
+func getLogIdFunc(ctx context.Context) (value any, ok bool) {
 	logId := GetLogID(ctx)
 	if logId == nil {
-		return "", false
+		return nil, false
 	}
 	return logId.String(), !logId.IsZero()
 }
 
 // function for ContextAttr.getFn
-func getParentLogIdFunc(ctx context.Context) (value string, ok bool) {
+func getParentLogIdFunc(ctx context.Context) (value any, ok bool) {
 	parentLogId := GetParentLogID(ctx)
 	if parentLogId == nil {
-		return "", false
+		return nil, false
 	}
 	return parentLogId.String(), !parentLogId.IsZero()
 }

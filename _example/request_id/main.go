@@ -12,22 +12,11 @@ import (
 
 type requestIdCtxKey struct{}
 
-func WithRequestId(ctx context.Context, requestId string) context.Context {
-	return context.WithValue(ctx, requestIdCtxKey{}, requestId)
-}
-
-func GetRequestId(ctx context.Context) string {
-	if requestId, ok := ctx.Value(requestIdCtxKey{}).(string); ok {
-		return requestId
-	}
-	return ""
-}
-
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Set the requestId to the context.
 		// All the logs in this request scope includes this requestId.
-		ctx := WithRequestId(r.Context(), "6c8b715a-dfe3-40bd-8634-40312fa05897")
+		ctx := context.WithValue(r.Context(), requestIdCtxKey{}, "6c8b715a-dfe3-40bd-8634-40312fa05897")
 
 		cslog.InfoContext(ctx, "start request")
 
@@ -49,16 +38,20 @@ func main() {
 	cslog.AddContextAttrs(
 		cslog.Context(
 			"requestId", nil,
-			func(ctx context.Context) (value string, ok bool) {
-				requestId := GetRequestId(ctx)
-				return requestId, requestId != ""
+			// When the log handler processes a Record, it call the function you've set here
+			// to retrieve a requestId from the context.
+			// Alternatively, you can use a utility function and write it as `cslog.GetFn[string](requestIdCtxKey{})`.
+			func(ctx context.Context) (value any, ok bool) {
+				value, ok = ctx.Value(requestIdCtxKey{}).(string)
+				return
 			},
+			nil,
 		),
 	)
 
 	// Simulate an HTTP request using httptest instead of starting a server.
-	handler := loggingMiddleware(http.HandlerFunc(helloWorldHandler))
+	httpHandler := loggingMiddleware(http.HandlerFunc(helloWorldHandler))
 	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080", nil)
 	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
+	httpHandler.ServeHTTP(resp, req)
 }

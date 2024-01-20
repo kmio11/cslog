@@ -130,7 +130,7 @@ func TestLog(t *testing.T) {
 
 		type ctxKey struct{}
 		cslog.AddContextAttrs(
-			cslog.Context("ctxAttr", nil, cslog.GetStringFn(ctxKey{})),
+			cslog.Context("ctxAttr", nil, cslog.GetFn[string](ctxKey{}), nil),
 		)
 
 		ctx := context.Background()
@@ -272,7 +272,7 @@ func TestNewLoggerWithContext(t *testing.T) {
 		testutil.SetIDGen(t)
 
 		type ctxKey struct{}
-		cslog.AddContextAttrs(cslog.Context("ctxAttr", nil, cslog.GetStringFn(ctxKey{})))
+		cslog.AddContextAttrs(cslog.Context("ctxAttr", nil, cslog.GetFn[string](ctxKey{}), nil))
 
 		ctx, logger := cslog.NewLoggerWithContext(
 			context.WithValue(
@@ -450,4 +450,155 @@ func TestCallDepth_Wrapping(t *testing.T) {
 	check(startLine + 2)
 	errorAttrs(logger, errors.New(""))
 	check(startLine + 4)
+}
+
+func TestLogger_WithContextAttrs(t *testing.T) {
+	h := testutil.NewBufTextHandler(t, testutil.BufHandlerOpts{
+		RemoveTime: true,
+	})
+
+	type ctxKey1 struct{}
+
+	t.Run("no_config", func(t *testing.T) {
+		logger := cslog.NewLogger(h).WithContextAttrs(
+			cslog.Context(
+				"key1",
+				nil,
+				nil,
+				nil,
+			),
+		)
+
+		ctx := context.Background()
+		ctxWithValue := context.WithValue(ctx, ctxKey1{}, "value1")
+
+		logger.InfoContext(ctx, "message")
+		h.Check(t, `^level=INFO msg=message$`)
+
+		logger.InfoContext(ctxWithValue, "message")
+		h.Check(t, `^level=INFO msg=message$`)
+	})
+
+	t.Run("defaultValue", func(t *testing.T) {
+		logger := cslog.NewLogger(h).WithContextAttrs(
+			cslog.Context(
+				"key1",
+				"defaultValue",
+				nil,
+				nil,
+			),
+		)
+
+		ctx := context.Background()
+		ctxWithValue := context.WithValue(ctx, ctxKey1{}, "value1")
+
+		logger.Info("message")
+		h.Check(t, `^level=INFO msg=message key1=defaultValue$`)
+
+		logger.InfoContext(ctx, "message")
+		h.Check(t, `^level=INFO msg=message key1=defaultValue$`)
+
+		logger.InfoContext(ctxWithValue, "message")
+		h.Check(t, `^level=INFO msg=message key1=defaultValue$`)
+	})
+
+	t.Run("getFn", func(t *testing.T) {
+		logger := cslog.NewLogger(h).WithContextAttrs(
+			cslog.Context(
+				"key1",
+				nil,
+				cslog.GetFn[string](ctxKey1{}),
+				nil,
+			),
+		)
+
+		ctx := context.Background()
+		ctxWithValue := context.WithValue(ctx, ctxKey1{}, "value1")
+		ctxWithInvalidTypeValue := context.WithValue(ctx, ctxKey1{}, 100)
+
+		logger.Info("message")
+		h.Check(t, `^level=INFO msg=message$`)
+
+		logger.InfoContext(ctx, "message")
+		h.Check(t, `^level=INFO msg=message$`)
+
+		logger.InfoContext(ctxWithValue, "message")
+		h.Check(t, `^level=INFO msg=message key1=value1$`)
+
+		logger.InfoContext(ctxWithInvalidTypeValue, "message")
+		h.Check(t, `^level=INFO msg=message$`)
+	})
+
+	t.Run("defaultValue_getFn", func(t *testing.T) {
+		logger := cslog.NewLogger(h).WithContextAttrs(
+			cslog.Context(
+				"key1",
+				"defaultValue",
+				cslog.GetFn[string](ctxKey1{}),
+				nil,
+			),
+		)
+
+		ctx := context.Background()
+		ctxWithValue := context.WithValue(ctx, ctxKey1{}, "value1")
+
+		logger.Info("message")
+		h.Check(t, `^level=INFO msg=message key1=defaultValue$`)
+
+		logger.InfoContext(ctx, "message")
+		h.Check(t, `^level=INFO msg=message key1=defaultValue$`)
+
+		logger.InfoContext(ctxWithValue, "message")
+		h.Check(t, `^level=INFO msg=message key1=value1$`)
+	})
+
+	t.Run("setFn", func(t *testing.T) {
+		logger := cslog.NewLogger(h).WithContextAttrs(
+			cslog.Context(
+				"key1",
+				"defaultValue",
+				cslog.GetFn[string](ctxKey1{}),
+				func(key string, value any) (attr slog.Attr, ok bool) {
+					if s, ok := value.(string); ok {
+						if s == "ignored" {
+							return slog.Attr{}, false
+						}
+						if s == "group" {
+							return slog.Group(
+								"group1",
+								slog.String(key, s),
+							), true
+						}
+						return slog.String("key1-custom", fmt.Sprintf("%s-custom", s)), true
+					}
+					return slog.Attr{}, false
+
+				},
+			),
+		)
+
+		ctx := context.Background()
+		ctxWithValue := context.WithValue(ctx, ctxKey1{}, "value1")
+		ctxWithIgnored := context.WithValue(ctx, ctxKey1{}, "ignored")
+		ctxWithGroup := context.WithValue(ctx, ctxKey1{}, "group")
+		ctxWithNil := context.WithValue(ctx, ctxKey1{}, nil)
+
+		logger.Info("message")
+		h.Check(t, `^level=INFO msg=message key1-custom=defaultValue-custom$`)
+
+		logger.InfoContext(ctx, "message")
+		h.Check(t, `^level=INFO msg=message key1-custom=defaultValue-custom$`)
+
+		logger.InfoContext(ctxWithValue, "message")
+		h.Check(t, `^level=INFO msg=message key1-custom=value1-custom$`)
+
+		logger.InfoContext(ctxWithIgnored, "message")
+		h.Check(t, `^level=INFO msg=message$`)
+
+		logger.InfoContext(ctxWithGroup, "message")
+		h.Check(t, `^level=INFO msg=message group1.key1=group$`)
+
+		logger.InfoContext(ctxWithNil, "message")
+		h.Check(t, `^level=INFO msg=message key1-custom=defaultValue-custom$`)
+	})
 }

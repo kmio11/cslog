@@ -39,12 +39,12 @@ func RemoveTime(groups []string, a slog.Attr) slog.Attr {
 	return a
 }
 
-func replaceAttr(t *testing.T, opts BufHandlerOpts) func(groups []string, a slog.Attr) slog.Attr {
+func replaceAttr(t *testing.T, removeTime bool) func(groups []string, a slog.Attr) slog.Attr {
 	t.Helper()
 
 	return func(groups []string, a slog.Attr) slog.Attr {
 		ret := a
-		if opts.RemoveTime {
+		if removeTime {
 			ret = RemoveTime(groups, a)
 		}
 		return ret
@@ -66,7 +66,7 @@ func NewBufTextHandler(t *testing.T, opts BufHandlerOpts) *BufTextHandler {
 	innerHandler := slog.NewTextHandler(
 		buf,
 		&slog.HandlerOptions{
-			ReplaceAttr: replaceAttr(t, opts),
+			ReplaceAttr: replaceAttr(t, opts.RemoveTime),
 			AddSource:   opts.AddSource,
 			Level:       cslog.LogLevel(),
 		},
@@ -83,7 +83,7 @@ func NewBufJSONHandler(t *testing.T, opts BufHandlerOpts) *BufJSONHandler {
 	innerHandler := slog.NewJSONHandler(
 		buf,
 		&slog.HandlerOptions{
-			ReplaceAttr: replaceAttr(t, opts),
+			ReplaceAttr: replaceAttr(t, opts.RemoveTime),
 			AddSource:   opts.AddSource,
 			Level:       cslog.LogLevel(),
 		},
