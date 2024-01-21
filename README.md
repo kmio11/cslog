@@ -27,6 +27,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 
 	"github.com/kmio11/cslog"
 )
@@ -69,6 +70,10 @@ func main() {
 			nil,
 		),
 	)
+	// By default, slog.Default().Handler() is used to handle records.
+	// You can use any handler with cslog.SetInnerHandler().
+	// If you want to use slog.JSONHandler, call cslog.SetJSONHandler.
+	cslog.SetJSONHandler(os.Stdout, &slog.HandlerOptions{})
 
 	// Simulate an HTTP request using httptest instead of starting a server.
 	httpHandler := loggingMiddleware(http.HandlerFunc(helloWorldHandler))
@@ -81,10 +86,10 @@ func main() {
 The outputs are:
 
 ```
-time=2024-01-01T12:01:39.654+09:00 level=INFO msg="start request" requestId=6c8b715a-dfe3-40bd-8634-40312fa05897
-time=2024-01-01T12:01:39.655+09:00 level=INFO msg="start hello" requestId=6c8b715a-dfe3-40bd-8634-40312fa05897
-time=2024-01-01T12:01:39.655+09:00 level=INFO msg="end hello" requestId=6c8b715a-dfe3-40bd-8634-40312fa05897
-time=2024-01-01T12:01:39.655+09:00 level=INFO msg="end request" code=200 requestId=6c8b715a-dfe3-40bd-8634-40312fa05897
+{"time":"2024-01-01T09:55:54.196341788+09:00","level":"INFO","msg":"start request","requestId":"6c8b715a-dfe3-40bd-8634-40312fa05897"}
+{"time":"2024-01-01T09:55:54.196397299+09:00","level":"INFO","msg":"start hello","requestId":"6c8b715a-dfe3-40bd-8634-40312fa05897"}
+{"time":"2024-01-01T09:55:54.196407281+09:00","level":"INFO","msg":"end hello","requestId":"6c8b715a-dfe3-40bd-8634-40312fa05897"}
+{"time":"2024-01-01T09:55:54.196409716+09:00","level":"INFO","msg":"end request","code":200,"requestId":"6c8b715a-dfe3-40bd-8634-40312fa05897"}
 ```
 
 ### Adding logId / parentLogId
@@ -122,14 +127,14 @@ func main() {
 The outputs are:
 
 ```
-time=2024-01-01T16:26:52.392+09:00 level=INFO msg="start: main" logId=d0bbfc94ea303585
-time=2024-01-01T16:26:52.392+09:00 level=INFO msg="start: sub process 0" logId=c843a7e179ee6657 parentLogId=d0bbfc94ea303585
-time=2024-01-01T16:26:52.392+09:00 level=INFO msg="end  : sub process 0" logId=c843a7e179ee6657 parentLogId=d0bbfc94ea303585
-time=2024-01-01T16:26:52.392+09:00 level=INFO msg="start: sub process 1" logId=1bc44979ec589d87 parentLogId=d0bbfc94ea303585
-time=2024-01-01T16:26:52.392+09:00 level=INFO msg="end  : sub process 1" logId=1bc44979ec589d87 parentLogId=d0bbfc94ea303585
-time=2024-01-01T16:26:52.392+09:00 level=INFO msg="start: sub process 2" logId=62fae7f4e90323b5 parentLogId=d0bbfc94ea303585
-time=2024-01-01T16:26:52.392+09:00 level=INFO msg="end  : sub process 2" logId=62fae7f4e90323b5 parentLogId=d0bbfc94ea303585
-time=2024-01-01T16:26:52.392+09:00 level=INFO msg="end  : main" logId=d0bbfc94ea303585
+2024/01/01 10:01:53 INFO start: main logId=835f149168a5218b
+2024/01/01 10:01:53 INFO start: sub process 0 logId=b5fdb8fd38ad42a4 parentLogId=835f149168a5218b
+2024/01/01 10:01:53 INFO end  : sub process 0 logId=b5fdb8fd38ad42a4 parentLogId=835f149168a5218b
+2024/01/01 10:01:53 INFO start: sub process 1 logId=ec3bbf8fdd12d4d3 parentLogId=835f149168a5218b
+2024/01/01 10:01:53 INFO end  : sub process 1 logId=ec3bbf8fdd12d4d3 parentLogId=835f149168a5218b
+2024/01/01 10:01:53 INFO start: sub process 2 logId=9ecbb7d29f00cfc9 parentLogId=835f149168a5218b
+2024/01/01 10:01:53 INFO end  : sub process 2 logId=9ecbb7d29f00cfc9 parentLogId=835f149168a5218b
+2024/01/01 10:01:53 INFO end  : main logId=835f149168a5218b
 ```
 
 The outputs include `logId` and `parentLogId`.

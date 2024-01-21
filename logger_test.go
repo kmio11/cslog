@@ -33,14 +33,9 @@ func TestLog(t *testing.T) {
 
 	t.Run("context", func(t *testing.T) {
 		testutil.SetIDGen(t)
+		t.Cleanup(h.SetLevel(t, slog.LevelDebug))
 
 		ctx := cslog.WithLogContext(context.Background())
-
-		// By default, debug messages are not printed.
-		cslog.DebugContext(ctx, "debug", slog.Int("a", 1), "b", 2)
-		check(t, "")
-
-		testutil.SetLogLevel(t, slog.LevelDebug)
 
 		cslog.DebugContext(ctx, "debug", slog.Int("a", 1), "b", 2)
 		check(t, "level=DEBUG msg=debug a=1 b=2 logId=0000000000000000")
@@ -66,14 +61,9 @@ func TestLog(t *testing.T) {
 
 	t.Run("without_context", func(t *testing.T) {
 		testutil.SetIDGen(t)
+		t.Cleanup(h.SetLevel(t, slog.LevelDebug))
 
 		_ = cslog.WithLogContext(context.Background())
-
-		// By default, debug messages are not printed.
-		cslog.Debug("debug", slog.Int("a", 1), "b", 2)
-		check(t, "")
-
-		testutil.SetLogLevel(t, slog.LevelDebug)
 
 		cslog.Debug("debug", slog.Int("a", 1), "b", 2)
 		check(t, "level=DEBUG msg=debug a=1 b=2")
@@ -93,15 +83,10 @@ func TestLog(t *testing.T) {
 
 	t.Run("context_child", func(t *testing.T) {
 		testutil.SetIDGen(t)
+		t.Cleanup(h.SetLevel(t, slog.LevelDebug))
 
 		ctx := cslog.WithLogContext(context.Background())
 		childCtx := cslog.WithChildLogContext(ctx)
-
-		// By default, debug messages are not printed.
-		cslog.DebugContext(childCtx, "debug", slog.Int("a", 1), "b", 2)
-		check(t, "")
-
-		testutil.SetLogLevel(t, slog.LevelDebug)
 
 		cslog.DebugContext(childCtx, "debug", slog.Int("a", 1), "b", 2)
 		check(t, "level=DEBUG msg=debug a=1 b=2 logId=0000000000000001 parentLogId=0000000000000000")
@@ -127,6 +112,7 @@ func TestLog(t *testing.T) {
 
 	t.Run("custom_attr", func(t *testing.T) {
 		testutil.SetIDGen(t)
+		t.Cleanup(h.SetLevel(t, slog.LevelDebug))
 
 		type ctxKey struct{}
 		cslog.AddContextAttrs(
@@ -166,14 +152,9 @@ func TestNewLoggerWithContext(t *testing.T) {
 
 	t.Run("logger_parent", func(t *testing.T) {
 		testutil.SetIDGen(t)
+		t.Cleanup(h.SetLevel(t, slog.LevelDebug))
 
 		ctx, logger := cslog.NewLoggerWithContext(context.Background())
-
-		// By default, debug messages are not printed.
-		logger.Debug("debug", slog.Int("a", 1), "b", 2)
-		check(t, "")
-
-		testutil.SetLogLevel(t, slog.LevelDebug)
 
 		logger.Debug("debug", slog.Int("a", 1), "b", 2)
 		check(t, "level=DEBUG msg=debug a=1 b=2 logId=0000000000000000")
@@ -199,15 +180,10 @@ func TestNewLoggerWithContext(t *testing.T) {
 
 	t.Run("logger_child", func(t *testing.T) {
 		testutil.SetIDGen(t)
+		t.Cleanup(h.SetLevel(t, slog.LevelDebug))
 
 		parentCtx, _ := cslog.NewLoggerWithContext(context.Background())
 		ctx, childLogger := cslog.NewLoggerWithChildContext(parentCtx)
-
-		// By default, debug messages are not printed.
-		childLogger.Debug("debug", slog.Int("a", 1), "b", 2)
-		check(t, "")
-
-		testutil.SetLogLevel(t, slog.LevelDebug)
 
 		childLogger.Debug("debug", slog.Int("a", 1), "b", 2)
 		check(t, "level=DEBUG msg=debug a=1 b=2 logId=0000000000000001 parentLogId=0000000000000000")
@@ -233,18 +209,13 @@ func TestNewLoggerWithContext(t *testing.T) {
 
 	t.Run("logger_context", func(t *testing.T) {
 		testutil.SetIDGen(t)
+		t.Cleanup(h.SetLevel(t, slog.LevelDebug))
 
 		parentCtx, _ := cslog.NewLoggerWithContext(context.Background())
 		ctx, childLogger := cslog.NewLoggerWithChildContext(parentCtx)
 
 		// If ctx has logId/parentLogId, logger's logId/parentLogId is overwritten.
 		ctx = cslog.WithChildLogContext(ctx)
-
-		// By default, debug messages are not printed.
-		childLogger.DebugContext(ctx, "debug", slog.Int("a", 1), "b", 2)
-		check(t, "")
-
-		testutil.SetLogLevel(t, slog.LevelDebug)
 
 		childLogger.DebugContext(ctx, "debug", slog.Int("a", 1), "b", 2)
 		check(t, "level=DEBUG msg=debug a=1 b=2 logId=0000000000000002 parentLogId=0000000000000001")
@@ -270,6 +241,7 @@ func TestNewLoggerWithContext(t *testing.T) {
 
 	t.Run("custom_attr", func(t *testing.T) {
 		testutil.SetIDGen(t)
+		t.Cleanup(h.SetLevel(t, slog.LevelDebug))
 
 		type ctxKey struct{}
 		cslog.AddContextAttrs(cslog.Context("ctxAttr", nil, cslog.GetFn[string](ctxKey{}), nil))
@@ -302,7 +274,7 @@ func TestCallDepth(t *testing.T) {
 		AddSource: true,
 	})
 	cslog.SetInnerHandler(h)
-	testutil.SetLogLevel(t, slog.LevelDebug)
+	t.Cleanup(h.SetLevel(t, slog.LevelDebug))
 
 	check := func(wantLine int) {
 		t.Helper()

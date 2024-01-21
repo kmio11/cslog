@@ -7,13 +7,12 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/kmio11/cslog"
 )
 
 type bufHandler struct {
-	buf *bytes.Buffer
 	slog.Handler
+	buf      *bytes.Buffer
+	logLevel *slog.LevelVar
 }
 
 type BufTextHandler struct {
@@ -51,46 +50,49 @@ func replaceAttr(t *testing.T, removeTime bool) func(groups []string, a slog.Att
 	}
 }
 
-func newBufHandler(t *testing.T, buf *bytes.Buffer, handler slog.Handler) *bufHandler {
+func newBufHandler(t *testing.T, buf *bytes.Buffer, handler slog.Handler, logLevel *slog.LevelVar) *bufHandler {
 	t.Helper()
 
 	return &bufHandler{
-		buf:     buf,
-		Handler: handler,
+		buf:      buf,
+		Handler:  handler,
+		logLevel: logLevel,
 	}
 }
 
 func NewBufTextHandler(t *testing.T, opts BufHandlerOpts) *BufTextHandler {
 	buf := new(bytes.Buffer)
+	logLevel := new(slog.LevelVar)
 
 	innerHandler := slog.NewTextHandler(
 		buf,
 		&slog.HandlerOptions{
 			ReplaceAttr: replaceAttr(t, opts.RemoveTime),
 			AddSource:   opts.AddSource,
-			Level:       cslog.LogLevel(),
+			Level:       logLevel,
 		},
 	)
 
 	return &BufTextHandler{
-		bufHandler: *newBufHandler(t, buf, innerHandler),
+		bufHandler: *newBufHandler(t, buf, innerHandler, logLevel),
 	}
 }
 
 func NewBufJSONHandler(t *testing.T, opts BufHandlerOpts) *BufJSONHandler {
 	buf := new(bytes.Buffer)
+	logLevel := new(slog.LevelVar)
 
 	innerHandler := slog.NewJSONHandler(
 		buf,
 		&slog.HandlerOptions{
 			ReplaceAttr: replaceAttr(t, opts.RemoveTime),
 			AddSource:   opts.AddSource,
-			Level:       cslog.LogLevel(),
+			Level:       logLevel,
 		},
 	)
 
 	return &BufJSONHandler{
-		bufHandler: *newBufHandler(t, buf, innerHandler),
+		bufHandler: *newBufHandler(t, buf, innerHandler, logLevel),
 	}
 }
 
@@ -102,6 +104,22 @@ func (h *bufHandler) Buf(t *testing.T) *bytes.Buffer {
 func (h *bufHandler) ResetBuf(t *testing.T) {
 	t.Helper()
 	h.buf.Reset()
+}
+
+func (h *bufHandler) SetLevel(t *testing.T, l slog.Level) (resetLevel func()) {
+	t.Helper()
+
+	if h.logLevel == nil {
+		return func() {}
+	}
+
+	bk := h.logLevel.Level()
+	resetLevel = func() {
+		h.logLevel.Set(bk)
+	}
+
+	h.logLevel.Set(l)
+	return resetLevel
 }
 
 func (h *BufTextHandler) Check(t *testing.T, wantRegexp string) {

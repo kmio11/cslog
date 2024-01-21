@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"log/slog"
-	"os"
 	"runtime"
 	"time"
 )
@@ -25,11 +24,7 @@ type (
 )
 
 var (
-	// logLevel represents the log level of the defaultLoggingProvider.
-	// When using a custom handler, this logLevel may be ignored.
-	// To utilize this logLevel in your custom handler, retrieve it using the [LogLevel] function.
-	logLevel              = new(slog.LevelVar)
-	defaultLoggerProvider = newDefaultProvider(os.Stdout)
+	defaultLoggerProvider = newDefaultProvider()
 
 	// NowFunc returns current time.
 	// This function is exported for testing.
@@ -42,13 +37,9 @@ func now() time.Time {
 	return NowFunc()
 }
 
-func newDefaultProvider(w io.Writer) *LoggerProvider {
+func newDefaultProvider() *LoggerProvider {
 	return NewLoggerProvider(
-		slog.NewTextHandler(w, &slog.HandlerOptions{
-			Level:       logLevel,
-			AddSource:   false,
-			ReplaceAttr: nil,
-		}),
+		slog.Default().Handler(),
 	)
 }
 
@@ -67,14 +58,14 @@ func SetInnerHandler(handler slog.Handler) {
 	defaultLoggerProvider.SetInnerHandler(handler)
 }
 
-// SetLogLevel sets the log level of the default logger provider.
-func SetLogLevel(level slog.Level) {
-	logLevel.Set(level)
+// SetTextHandler sets the slog.TextHandler as the default logger provider's handler.
+func SetTextHandler(w io.Writer, opts *slog.HandlerOptions) {
+	defaultLoggerProvider.SetTextHandler(w, opts)
 }
 
-// LogLevel returns log level of the default logger provider.
-func LogLevel() *slog.LevelVar {
-	return logLevel
+// SetJSONHandler sets the slog.JSONHandler as the default logger provider's handler.
+func SetJSONHandler(w io.Writer, opts *slog.HandlerOptions) {
+	defaultLoggerProvider.SetJSONHandler(w, opts)
 }
 
 // NewLoggerProvider returns LoggerProvider.
@@ -89,9 +80,19 @@ func NewLoggerProvider(innerHandler slog.Handler) *LoggerProvider {
 	}
 }
 
-// SetInnerHandler sets the handler.
+// SetInnerHandler sets the inner handler.
 func (p *LoggerProvider) SetInnerHandler(handler slog.Handler) {
 	p.logger.contextHandler().SetInnerHandler(handler)
+}
+
+// SetTextHandler sets the slog.TextHandler as the inner handler.
+func (p *LoggerProvider) SetTextHandler(w io.Writer, opts *slog.HandlerOptions) {
+	p.SetInnerHandler(slog.NewTextHandler(w, opts))
+}
+
+// SetJSONHandler sets the slog.JSONHandler as the inner handler.
+func (p *LoggerProvider) SetJSONHandler(w io.Writer, opts *slog.HandlerOptions) {
+	p.SetInnerHandler(slog.NewJSONHandler(w, opts))
 }
 
 // AddContextAttrs sets the attr (key-value pair) obtained from context to be output to the log.

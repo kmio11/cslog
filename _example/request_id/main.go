@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 
 	"github.com/kmio11/cslog"
 )
@@ -48,6 +49,10 @@ func main() {
 			nil,
 		),
 	)
+	// By default, slog.Default().Handler() is used to handle records.
+	// You can use any handler with cslog.SetInnerHandler().
+	// If you want to use slog.JSONHandler, call cslog.SetJSONHandler.
+	cslog.SetJSONHandler(os.Stdout, &slog.HandlerOptions{})
 
 	// Simulate an HTTP request using httptest instead of starting a server.
 	httpHandler := loggingMiddleware(http.HandlerFunc(helloWorldHandler))
